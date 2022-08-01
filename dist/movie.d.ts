@@ -17,13 +17,14 @@ export declare class MovieOptions {
     canvas: HTMLCanvasElement;
     /** The audio context to use for playback, defaults to a new audio context */
     actx?: AudioContext;
-    /** @deprecated Use <code>actx</code> instead */
+    /** @deprecated Use actx instead */
     audioContext?: AudioContext;
     /** The background color of the movie as a cSS string */
     background?: Dynamic<string>;
     repeat?: boolean;
     /** Call `refresh` when the user changes a property on the movie or any of its layers or effects */
     autoRefresh?: boolean;
+    fps: number;
 }
 /**
  * The movie contains everything included in the render.
@@ -64,6 +65,12 @@ export declare class Movie {
     private _mediaRecorder;
     private _lastPlayed;
     private _lastPlayedOffset;
+    private _mediaReady;
+    private _framerate;
+    private _actualFramerate;
+    private _frameCounter;
+    private _intervalSeconds;
+    private _intervalFrames;
     /**
      * Creates a new movie.
      */
@@ -73,6 +80,11 @@ export declare class Movie {
      * @return fulfilled when the movie is done playing, never fails
      */
     play(): Promise<void>;
+    /**
+     * Plays the movie
+     * @return true
+     */
+    testPlay(): void;
     /**
      * Plays the movie in the background and records it
      *
@@ -109,6 +121,12 @@ export declare class Movie {
      * @private
      */
     private _render;
+    /**
+     * @param [timestamp=performance.now()]
+     * @param [done=undefined] - called when done playing or when the current frame is loaded
+     * @private
+     */
+    private _newRender;
     private _updateCurrentTime;
     private _renderBackground;
     /**
@@ -139,6 +157,7 @@ export declare class Movie {
      * If the movie is recording
      */
     get recording(): boolean;
+    get actualFramerate(): number;
     /**
      * The combined duration of all layers
      */
@@ -167,6 +186,7 @@ export declare class Movie {
      */
     get currentTime(): number;
     set currentTime(time: number);
+    get mediaReady(): boolean;
     /**
      * Sets the current playback position. This is a more powerful version of
      * `set currentTime`.
