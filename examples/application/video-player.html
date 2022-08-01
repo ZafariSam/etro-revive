@@ -108,8 +108,8 @@
       })
 
       const video = document.querySelector('video')
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
+      //canvas.width = video.videoWidth
+      //canvas.height = video.videoHeight
 
       // For simplicity, only use one layer
       movie.addLayer(
@@ -120,9 +120,9 @@
     })
   </script>
   <div id="container">
-    <video src="../assets/desert.mp4"></video>
+    <video src="../assets/FR_CC_1_2_5.mp4"></video>
     <img src="../assets/lake.jpg"/>
-    <canvas id="output"></canvas><br>
+    <canvas id="output" width="1920" height="1080" style="width: 1280px; height: 720px"></canvas><br>
     <button id="pause-play" class="play"><!-- styled --></button>
     <input id="progress" type="range" value="0"/>
   </div>
