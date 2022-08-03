@@ -72,6 +72,7 @@ export declare class Movie {
     private _intervalSeconds;
     private _intervalFrames;
     private _elapsedTime;
+    private _localFrameCounter;
     /**
      * Creates a new movie.
      */
@@ -85,7 +86,7 @@ export declare class Movie {
      * Plays the movie
      * @return true
      */
-    testPlay(): void;
+    testPlay(singleFrame: boolean): void;
     /**
      * Plays the movie in the background and records it
      *
@@ -115,7 +116,7 @@ export declare class Movie {
      * Stops playback and resets the playback position
      * @return the movie (for chaining)
      */
-    stop(): Movie;
+    stop(): Promise<Movie>;
     /**
      * @param [timestamp=performance.now()]
      * @param [done=undefined] - called when done playing or when the current frame is loaded
@@ -135,8 +136,7 @@ export declare class Movie {
     private _updateCurrentTime;
     private _renderBackground;
     /**
-     * @return whether or not video frames are loaded
-     * @param [timestamp=performance.now()]
+     * @return Renders the individual layer.
      * @private
      */
     private _renderLayers;

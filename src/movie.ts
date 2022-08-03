@@ -90,6 +90,7 @@ export class Movie {
   private _intervalSeconds: number
   private _intervalFrames: number
   private _elapsedTime: number
+  private _localFrameCounter: number
 
   /**
    * Creates a new movie.
@@ -210,6 +211,8 @@ export class Movie {
     // newThis._updateInterval = 0.1; // time in seconds between each "timeupdate" event
     // newThis._lastUpdate = -1;
 
+    this.refresh();
+
     if (newThis.autoRefresh)
       newThis.refresh() // render single frame on creation
 
@@ -259,52 +262,67 @@ export class Movie {
    * Plays the movie
    * @return true
    */
-  testPlay(): void {
+  testPlay(singleFrame: boolean): void {
     if(!this.paused){
       console.log('Already Playing');
       return
       throw new Error('Already playing');
     }
-
-    let lastFrameRendered = performance.now();
     
-    this._frameCounter = 0;
+    let lastFrameRendered = performance.now();
+    let readyForNextFrame = true;
+    let duration = this.duration;
+    let interval = 1000/this._framerate;
+    
+    this._localFrameCounter = 0;
     this._lastPlayed = performance.now();
     this._paused = false;
     this._ended = false;
-    this._lastPlayedOffset = this.currentTime;
-    let duration = this.duration;
+    
 
-    let readyForNextFrame = true;
-
-    this._newRender(false, undefined, duration);
-
-    this._intervalSeconds = window.setInterval(() => {
-      this._actualFramerate = this._frameCounter;
-
-      console.log(this._actualFramerate);
-
-      this._frameCounter = 0;
-    }, 1000);
-
+    if(!singleFrame){
     this._intervalFrames = window.setInterval(async () => {
-      this._elapsedTime = this._elapsedTime + (performance.now() - lastFrameRendered);
+    //   if(singleFrame && this._frameCounter == 1){
+    //     console.log('Single Frame');
+    //     this.pause();
+    //     return
+    //   }
 
-      console.log(`Frame: ${Math.floor(this._elapsedTime/(1000/this._framerate))}` )
+      this._currentTime = this._currentTime + 0.04;
 
-      lastFrameRendered = performance.now();
+      console.log(`Frame: ${Math.floor(this._currentTime/(interval)*1000)}` )
 
-      console.log(`Elapsed: ${this._elapsedTime}`);
-      console.log(`Current Time: ${this.currentTime}`)
+    //   lastFrameRendered = performance.now();
 
-      if(!readyForNextFrame){return};
-      readyForNextFrame = false;
+      console.log(`Current Time: ${this.currentTime}`);
+
+    //   if(!readyForNextFrame){return};
+    //   readyForNextFrame = false;
       this._frameCounter++;
-      await this._newRender(false, undefined, duration);
-      this._renderingFrame = false;
-      readyForNextFrame = true;
+      await this._newRender(true, undefined, duration);
+      return;
+    //   this._renderingFrame = false;
+    //   readyForNextFrame = true;
 
-    }, 1000/this._framerate);
+    }, interval);
+  
+    }
+
+    if(singleFrame){
+      this._currentTime = this._currentTime + 0.04;
+      console.log('single frame');
+      this._newRender(false, undefined, duration).then(() => {this.pause()});
+      this.refresh();
+      
+    }
+
+    // this._intervalSeconds = window.setInterval(() => {
+    //   this._actualFramerate = this._frameCounter;
+
+    //   console.log(this._actualFramerate);
+
+    //   this._frameCounter = 0;
+    // }, 1000);
 
 
     publish(this, 'movie.play', {});
@@ -438,13 +456,16 @@ export class Movie {
    * Stops playback and resets the playback position
    * @return the movie (for chaining)
    */
-  stop (): Movie {
-    this.pause();
-    this.currentTime = 0;
-    this._elapsedTime = 0;
+  async stop (): Promise<Movie> {
+    //this.pause();
+  
+    this._currentTime = 0;
     //this._updateCurrentTime(performance.now());
-    this.refresh();
-    //this._newRender(false, undefined);
+    //this.testPlay(true);
+    await this._newRender(false, undefined);
+    this._currentTime = 0;
+    await this._newRender(true, undefined);
+    publish(this, 'movie.stop', {movie: this})
     return this
   }
 
@@ -547,32 +568,24 @@ export class Movie {
    * @param [done=undefined] - called when done playing or when the current frame is loaded
    * @private
    */
-   private _newRender (repeat, timestamp = performance.now(), duration: number): Promise<boolean> {
+   private _newRender (repeat, timestamp = performance.now(), duration = this.duration): Promise<boolean> {
     return new Promise((resolve, reject) => {
       clearCachedValues(this);
 
-       //console.log(timestamp);
+      //console.log(this.layers[0]);
 
       if (!this.rendering) {
         console.log('Not Rendering!');
-        
         resolve(true);
-        // (!this.paused || this._renderingFrame) is true so it's playing or it's
-        // rendering a single frame.
-        // if (done)
-        //   done()
-  
-        // return
+        //return
       }
 
-      this._updateCurrentTime(timestamp);
+    //this._updateCurrentTime(timestamp);
 
-      const end = this.recording ? this._recordEndTime : duration;
-
+    const end = this.recording ? this._recordEndTime : duration;
 
     // TODO: Is calling duration every frame bad for performance? (remember,
     // it's calling Array.reduce)
-    
     if (this.currentTime > end) {
       if (this.recording)
         publish(this, 'movie.recordended', { movie: this })
@@ -585,13 +598,12 @@ export class Movie {
         }
       }
       
-
       // TODO: only reset currentTime if repeating
       if (this.repeat) {
       // Don't use setter, which publishes 'movie.seek'. Instead, update the
       // value and publish a 'movie.timeupdate' event.
         this._currentTime = 0;
-        this._elapsedTime = 0;
+
         publish(this, 'movie.timeupdate', { movie: this })
       }
 
@@ -620,14 +632,13 @@ export class Movie {
         if (true){
           resolve(true)
         }
-          
-
-        return
+        
+        //return
       }
     
       }
       // Do render
-      this._renderBackground(timestamp)
+      this._renderBackground(this.currentTime);
       const frameFullyLoaded = this._renderLayers()
       this._applyEffects()
 
@@ -658,6 +669,7 @@ export class Movie {
     // If we're only instant-rendering (current frame only), it doens't matter
     // if it's paused or not.
     if (!this._renderingFrame) {
+      //console.log("Update Time");
       // if ((timestamp - this._lastUpdate) >= this._updateInterval) {
       const sinceLastPlayed = (timestamp - this._lastPlayed) / 1000
       const currentTime = this._lastPlayedOffset + sinceLastPlayed // don't use setter
@@ -680,8 +692,7 @@ export class Movie {
   }
 
   /**
-   * @return whether or not video frames are loaded
-   * @param [timestamp=performance.now()]
+   * @return Renders the individual layer.
    * @private
    */
   private _renderLayers () {
@@ -731,10 +742,9 @@ export class Movie {
         if (canvas.width * canvas.height > 0)
           this.cctx.drawImage(canvas,
             val(layer, 'x', reltime), val(layer, 'y', reltime), canvas.width, canvas.height
-          )
+          );
       }
     }
-
     return frameFullyLoaded
   }
 
@@ -756,8 +766,8 @@ export class Movie {
    */
   refresh (): Promise<null> {
     return new Promise(resolve => {
-      this._renderingFrame = true
-      this._render(false, undefined, resolve);
+      this._renderingFrame = true;
+      this._newRender(false, undefined).then(() => {resolve(null)});
     })
   }
 

@@ -89,7 +89,7 @@ class Visual extends Base {
     if (width === 0 || height === 0)
       return
 
-    this.beginRender()
+    this.beginRender();
     this.doRender()
     this.endRender()
   }

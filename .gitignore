@@ -6,3 +6,4 @@ examples/assets
 
 # environment
 .env
+.DS_Store

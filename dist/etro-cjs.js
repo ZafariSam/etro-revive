@@ -1075,6 +1075,7 @@ function VisualSourceMixin(superclass) {
              * The main reason this distinction exists is so that an image layer can
              * be rotated without being cropped (see iss #46).
              */
+            this.source.onpause = function (ev) { ev.target.currentTime = 0; };
             this.cctx.drawImage(this.source, val(this, 'sourceX', this.currentTime), val(this, 'sourceY', this.currentTime), val(this, 'sourceWidth', this.currentTime), val(this, 'sourceHeight', this.currentTime), 
             // `destX` and `destY` are relative to the layer
             val(this, 'destX', this.currentTime), val(this, 'destY', this.currentTime), val(this, 'destWidth', this.currentTime), val(this, 'destHeight', this.currentTime));
@@ -2519,6 +2520,7 @@ var Movie = /** @class */ (function () {
         this._lastPlayedOffset = -1;
         // newThis._updateInterval = 0.1; // time in seconds between each "timeupdate" event
         // newThis._lastUpdate = -1;
+        this.refresh();
         if (newThis.autoRefresh)
             newThis.refresh(); // render single frame on creation
         // Subscribe to own event "change" (child events propogate up)
@@ -2560,7 +2562,7 @@ var Movie = /** @class */ (function () {
      * Plays the movie
      * @return true
      */
-    Movie.prototype.testPlay = function () {
+    Movie.prototype.testPlay = function (singleFrame) {
         var _this = this;
         if (!this.paused) {
             console.log('Already Playing');
@@ -2568,42 +2570,48 @@ var Movie = /** @class */ (function () {
             throw new Error('Already playing');
         }
         var lastFrameRendered = performance.now();
-        this._frameCounter = 0;
+        var duration = this.duration;
+        var interval = 1000 / this._framerate;
+        this._localFrameCounter = 0;
         this._lastPlayed = performance.now();
         this._paused = false;
         this._ended = false;
-        this._lastPlayedOffset = this.currentTime;
-        var duration = this.duration;
-        var readyForNextFrame = true;
-        this._newRender(false, undefined, duration);
-        this._intervalSeconds = window.setInterval(function () {
-            _this._actualFramerate = _this._frameCounter;
-            console.log(_this._actualFramerate);
-            _this._frameCounter = 0;
-        }, 1000);
-        this._intervalFrames = window.setInterval(function () { return __awaiter(_this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        this._elapsedTime = this._elapsedTime + (performance.now() - lastFrameRendered);
-                        console.log("Frame: ".concat(Math.floor(this._elapsedTime / (1000 / this._framerate))));
-                        lastFrameRendered = performance.now();
-                        console.log("Elapsed: ".concat(this._elapsedTime));
-                        console.log("Current Time: ".concat(this.currentTime));
-                        if (!readyForNextFrame) {
+        if (!singleFrame) {
+            this._intervalFrames = window.setInterval(function () { return __awaiter(_this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            //   if(singleFrame && this._frameCounter == 1){
+                            //     console.log('Single Frame');
+                            //     this.pause();
+                            //     return
+                            //   }
+                            this._currentTime = this._currentTime + 0.04;
+                            console.log("Frame: ".concat(Math.floor(this._currentTime / (interval) * 1000)));
+                            //   lastFrameRendered = performance.now();
+                            console.log("Current Time: ".concat(this.currentTime));
+                            //   if(!readyForNextFrame){return};
+                            //   readyForNextFrame = false;
+                            this._frameCounter++;
+                            return [4 /*yield*/, this._newRender(true, undefined, duration)];
+                        case 1:
+                            _a.sent();
                             return [2 /*return*/];
-                        }
-                        readyForNextFrame = false;
-                        this._frameCounter++;
-                        return [4 /*yield*/, this._newRender(false, undefined, duration)];
-                    case 1:
-                        _a.sent();
-                        this._renderingFrame = false;
-                        readyForNextFrame = true;
-                        return [2 /*return*/];
-                }
-            });
-        }); }, 1000 / this._framerate);
+                    }
+                });
+            }); }, interval);
+        }
+        if (singleFrame) {
+            this._currentTime = this._currentTime + 0.04;
+            console.log('single frame');
+            this._newRender(false, undefined, duration).then(function () { _this.pause(); });
+            this.refresh();
+        }
+        // this._intervalSeconds = window.setInterval(() => {
+        //   this._actualFramerate = this._frameCounter;
+        //   console.log(this._actualFramerate);
+        //   this._frameCounter = 0;
+        // }, 1000);
         publish(this, 'movie.play', {});
         //return true;
     };
@@ -2711,13 +2719,28 @@ var Movie = /** @class */ (function () {
      * @return the movie (for chaining)
      */
     Movie.prototype.stop = function () {
-        this.pause();
-        this.currentTime = 0;
-        this._elapsedTime = 0;
-        //this._updateCurrentTime(performance.now());
-        this.refresh();
-        //this._newRender(false, undefined);
-        return this;
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        //this.pause();
+                        this._currentTime = 0;
+                        //this._updateCurrentTime(performance.now());
+                        //this.testPlay(true);
+                        return [4 /*yield*/, this._newRender(false, undefined)];
+                    case 1:
+                        //this._updateCurrentTime(performance.now());
+                        //this.testPlay(true);
+                        _a.sent();
+                        this._currentTime = 0;
+                        return [4 /*yield*/, this._newRender(true, undefined)];
+                    case 2:
+                        _a.sent();
+                        publish(this, 'movie.stop', { movie: this });
+                        return [2 /*return*/, this];
+                }
+            });
+        });
     };
     /**
      * @param [timestamp=performance.now()]
@@ -2806,19 +2829,16 @@ var Movie = /** @class */ (function () {
     Movie.prototype._newRender = function (repeat, timestamp, duration) {
         var _this = this;
         if (timestamp === void 0) { timestamp = performance.now(); }
+        if (duration === void 0) { duration = this.duration; }
         return new Promise(function (resolve, reject) {
             clearCachedValues(_this);
-            //console.log(timestamp);
+            //console.log(this.layers[0]);
             if (!_this.rendering) {
                 console.log('Not Rendering!');
                 resolve(true);
-                // (!this.paused || this._renderingFrame) is true so it's playing or it's
-                // rendering a single frame.
-                // if (done)
-                //   done()
-                // return
+                //return
             }
-            _this._updateCurrentTime(timestamp);
+            //this._updateCurrentTime(timestamp);
             var end = _this.recording ? _this._recordEndTime : duration;
             // TODO: Is calling duration every frame bad for performance? (remember,
             // it's calling Array.reduce)
@@ -2837,7 +2857,6 @@ var Movie = /** @class */ (function () {
                     // Don't use setter, which publishes 'movie.seek'. Instead, update the
                     // value and publish a 'movie.timeupdate' event.
                     _this._currentTime = 0;
-                    _this._elapsedTime = 0;
                     publish(_this, 'movie.timeupdate', { movie: _this });
                 }
                 _this._lastPlayed = performance.now();
@@ -2862,11 +2881,11 @@ var Movie = /** @class */ (function () {
                     {
                         resolve(true);
                     }
-                    return;
+                    //return
                 }
             }
             // Do render
-            _this._renderBackground(timestamp);
+            _this._renderBackground(_this.currentTime);
             var frameFullyLoaded = _this._renderLayers();
             _this._applyEffects();
             if (frameFullyLoaded)
@@ -2891,6 +2910,7 @@ var Movie = /** @class */ (function () {
         // If we're only instant-rendering (current frame only), it doens't matter
         // if it's paused or not.
         if (!this._renderingFrame) {
+            //console.log("Update Time");
             // if ((timestamp - this._lastUpdate) >= this._updateInterval) {
             var sinceLastPlayed = (timestamp - this._lastPlayed) / 1000;
             var currentTime = this._lastPlayedOffset + sinceLastPlayed; // don't use setter
@@ -2911,8 +2931,7 @@ var Movie = /** @class */ (function () {
         }
     };
     /**
-     * @return whether or not video frames are loaded
-     * @param [timestamp=performance.now()]
+     * @return Renders the individual layer.
      * @private
      */
     Movie.prototype._renderLayers = function () {
@@ -2979,7 +2998,7 @@ var Movie = /** @class */ (function () {
         var _this = this;
         return new Promise(function (resolve) {
             _this._renderingFrame = true;
-            _this._render(false, undefined, resolve);
+            _this._newRender(false, undefined).then(function () { resolve(null); });
         });
     };
     /**
