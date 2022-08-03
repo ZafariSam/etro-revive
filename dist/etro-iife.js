@@ -2512,9 +2512,10 @@ var etro = (function () {
             this.currentTime = 0;
             // For recording
             this._mediaRecorder = null;
+            this._elapsedTime = 0;
             // -1 works well in inequalities
             // The last time `play` was called
-            this._lastPlayed = -1;
+            this._lastPlayed = 0;
             // What was `currentTime` when `play` was called
             this._lastPlayedOffset = -1;
             // newThis._updateInterval = 0.1; // time in seconds between each "timeupdate" event
@@ -2563,16 +2564,19 @@ var etro = (function () {
         Movie.prototype.testPlay = function () {
             var _this = this;
             if (!this.paused) {
+                console.log('Already Playing');
                 return;
                 throw new Error('Already playing');
             }
+            var lastFrameRendered = performance.now();
             this._frameCounter = 0;
             this._lastPlayed = performance.now();
             this._paused = false;
             this._ended = false;
             this._lastPlayedOffset = this.currentTime;
+            var duration = this.duration;
             var readyForNextFrame = true;
-            this._newRender(false, undefined);
+            this._newRender(false, undefined, duration);
             this._intervalSeconds = window.setInterval(function () {
                 _this._actualFramerate = _this._frameCounter;
                 console.log(_this._actualFramerate);
@@ -2582,15 +2586,20 @@ var etro = (function () {
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
+                            this._elapsedTime = this._elapsedTime + (performance.now() - lastFrameRendered);
+                            console.log("Frame: ".concat(Math.floor(this._elapsedTime / (1000 / this._framerate))));
+                            lastFrameRendered = performance.now();
+                            console.log("Elapsed: ".concat(this._elapsedTime));
+                            console.log("Current Time: ".concat(this.currentTime));
                             if (!readyForNextFrame) {
                                 return [2 /*return*/];
                             }
                             readyForNextFrame = false;
                             this._frameCounter++;
-                            return [4 /*yield*/, this._newRender(false, undefined)];
+                            return [4 /*yield*/, this._newRender(false, undefined, duration)];
                         case 1:
                             _a.sent();
-                            console.log('Render Returned');
+                            this._renderingFrame = false;
                             readyForNextFrame = true;
                             return [2 /*return*/];
                     }
@@ -2705,7 +2714,8 @@ var etro = (function () {
         Movie.prototype.stop = function () {
             this.pause();
             this.currentTime = 0;
-            this._updateCurrentTime(performance.now());
+            this._elapsedTime = 0;
+            //this._updateCurrentTime(performance.now());
             this.refresh();
             //this._newRender(false, undefined);
             return this;
@@ -2735,8 +2745,9 @@ var etro = (function () {
             if (this.currentTime > end) {
                 if (this.recording)
                     publish(this, 'movie.recordended', { movie: this });
-                if (this.currentTime > this.duration)
+                if (this.currentTime > this.duration) {
                     publish(this, 'movie.ended', { movie: this, repeat: this.repeat });
+                }
                 // TODO: only reset currentTime if repeating
                 if (this.repeat) {
                     // Don't use setter, which publishes 'movie.seek'. Instead, update the
@@ -2793,12 +2804,12 @@ var etro = (function () {
          * @param [done=undefined] - called when done playing or when the current frame is loaded
          * @private
          */
-        Movie.prototype._newRender = function (repeat, timestamp) {
+        Movie.prototype._newRender = function (repeat, timestamp, duration) {
             var _this = this;
             if (timestamp === void 0) { timestamp = performance.now(); }
             return new Promise(function (resolve, reject) {
                 clearCachedValues(_this);
-                console.log(timestamp);
+                //console.log(timestamp);
                 if (!_this.rendering) {
                     console.log('Not Rendering!');
                     resolve(true);
@@ -2809,19 +2820,25 @@ var etro = (function () {
                     // return
                 }
                 _this._updateCurrentTime(timestamp);
-                var end = _this.recording ? _this._recordEndTime : _this.duration;
+                var end = _this.recording ? _this._recordEndTime : duration;
                 // TODO: Is calling duration every frame bad for performance? (remember,
                 // it's calling Array.reduce)
                 if (_this.currentTime > end) {
                     if (_this.recording)
                         publish(_this, 'movie.recordended', { movie: _this });
-                    if (_this.currentTime > _this.duration)
+                    if (_this.currentTime > _this.duration) {
+                        _this._elapsedTime = 0;
                         publish(_this, 'movie.ended', { movie: _this, repeat: _this.repeat });
+                        if (!repeat) {
+                            _this.pause();
+                        }
+                    }
                     // TODO: only reset currentTime if repeating
                     if (_this.repeat) {
                         // Don't use setter, which publishes 'movie.seek'. Instead, update the
                         // value and publish a 'movie.timeupdate' event.
                         _this._currentTime = 0;
+                        _this._elapsedTime = 0;
                         publish(_this, 'movie.timeupdate', { movie: _this });
                     }
                     _this._lastPlayed = performance.now();
@@ -2867,6 +2884,10 @@ var etro = (function () {
                 }
             });
         };
+        /**
+         * Updates the current time
+         * @param timestamp
+         */
         Movie.prototype._updateCurrentTime = function (timestamp) {
             // If we're only instant-rendering (current frame only), it doens't matter
             // if it's paused or not.
@@ -2923,6 +2944,7 @@ var etro = (function () {
                 if (!layer.active && val(layer, 'enabled', reltime) && !this._renderingFrame) {
                     // TODO: make an `activate()` method?
                     layer.start();
+                    console.log("Start");
                     layer.active = true;
                 }
                 // if the layer has an input file

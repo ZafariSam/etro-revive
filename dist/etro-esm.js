@@ -1,5 +1,3 @@
-'use strict';
-
 /*! *****************************************************************************
 Copyright (c) Microsoft Corporation.
 
@@ -3236,4 +3234,4 @@ var etro = /*#__PURE__*/Object.freeze({
  * @module index
  */
 
-module.exports = etro;
+export default etro;

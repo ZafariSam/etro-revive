@@ -23,12 +23,16 @@ export default [
       typescript(),
       resolve()
     ]
+  },
+  // es6 module bundle
+  {
+      input: "src/index.ts",
+      output: { file: "dist/etro-esm.js", format: "esm", name: "etro" },
+      plugins: [
+        typescript(),
+        resolve()
+      ]
   }
-  // // es6 module bundle
-  // {
-  //     input: "src/index.js",
-  //     output: { file: "dist/etro-esm.js", format: "esm", name: "etro" }
-  // },
 
   /*      ERRORS FOR SOME REASON
     // iife bundle (minified)

@@ -71,6 +71,7 @@ export declare class Movie {
     private _frameCounter;
     private _intervalSeconds;
     private _intervalFrames;
+    private _elapsedTime;
     /**
      * Creates a new movie.
      */
@@ -127,6 +128,10 @@ export declare class Movie {
      * @private
      */
     private _newRender;
+    /**
+     * Updates the current time
+     * @param timestamp
+     */
     private _updateCurrentTime;
     private _renderBackground;
     /**

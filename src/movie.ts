@@ -89,6 +89,7 @@ export class Movie {
   private _frameCounter: number
   private _intervalSeconds: number
   private _intervalFrames: number
+  private _elapsedTime: number
 
   /**
    * Creates a new movie.
@@ -200,9 +201,10 @@ export class Movie {
     // For recording
     this._mediaRecorder = null
 
+    this._elapsedTime = 0
     // -1 works well in inequalities
     // The last time `play` was called
-    this._lastPlayed = -1
+    this._lastPlayed = 0
     // What was `currentTime` when `play` was called
     this._lastPlayedOffset = -1
     // newThis._updateInterval = 0.1; // time in seconds between each "timeupdate" event
@@ -259,34 +261,51 @@ export class Movie {
    */
   testPlay(): void {
     if(!this.paused){
+      console.log('Already Playing');
       return
       throw new Error('Already playing');
     }
+
+    let lastFrameRendered = performance.now();
+    
     this._frameCounter = 0;
     this._lastPlayed = performance.now();
     this._paused = false;
     this._ended = false;
     this._lastPlayedOffset = this.currentTime;
+    let duration = this.duration;
 
     let readyForNextFrame = true;
 
-    this._newRender(false, undefined);
+    this._newRender(false, undefined, duration);
 
     this._intervalSeconds = window.setInterval(() => {
       this._actualFramerate = this._frameCounter;
+
       console.log(this._actualFramerate);
+
       this._frameCounter = 0;
     }, 1000);
 
     this._intervalFrames = window.setInterval(async () => {
+      this._elapsedTime = this._elapsedTime + (performance.now() - lastFrameRendered);
+
+      console.log(`Frame: ${Math.floor(this._elapsedTime/(1000/this._framerate))}` )
+
+      lastFrameRendered = performance.now();
+
+      console.log(`Elapsed: ${this._elapsedTime}`);
+      console.log(`Current Time: ${this.currentTime}`)
+
       if(!readyForNextFrame){return};
       readyForNextFrame = false;
       this._frameCounter++;
-      await this._newRender(false, undefined);
-      console.log('Render Returned');
+      await this._newRender(false, undefined, duration);
+      this._renderingFrame = false;
       readyForNextFrame = true;
 
     }, 1000/this._framerate);
+
 
     publish(this, 'movie.play', {});
     //return true;
@@ -422,7 +441,8 @@ export class Movie {
   stop (): Movie {
     this.pause();
     this.currentTime = 0;
-    this._updateCurrentTime(performance.now());
+    this._elapsedTime = 0;
+    //this._updateCurrentTime(performance.now());
     this.refresh();
     //this._newRender(false, undefined);
     return this
@@ -456,8 +476,9 @@ export class Movie {
       if (this.recording)
         publish(this, 'movie.recordended', { movie: this })
 
-      if (this.currentTime > this.duration)
+      if (this.currentTime > this.duration){
         publish(this, 'movie.ended', { movie: this, repeat: this.repeat })
+      }
 
       // TODO: only reset currentTime if repeating
       if (this.repeat) {
@@ -526,11 +547,11 @@ export class Movie {
    * @param [done=undefined] - called when done playing or when the current frame is loaded
    * @private
    */
-   private _newRender (repeat, timestamp = performance.now()): Promise<boolean> {
+   private _newRender (repeat, timestamp = performance.now(), duration: number): Promise<boolean> {
     return new Promise((resolve, reject) => {
       clearCachedValues(this);
 
-       console.log(timestamp);
+       //console.log(timestamp);
 
       if (!this.rendering) {
         console.log('Not Rendering!');
@@ -546,7 +567,7 @@ export class Movie {
 
       this._updateCurrentTime(timestamp);
 
-      const end = this.recording ? this._recordEndTime : this.duration;
+      const end = this.recording ? this._recordEndTime : duration;
 
 
     // TODO: Is calling duration every frame bad for performance? (remember,
@@ -556,14 +577,21 @@ export class Movie {
       if (this.recording)
         publish(this, 'movie.recordended', { movie: this })
 
-      if (this.currentTime > this.duration)
+      if (this.currentTime > this.duration){
+        this._elapsedTime = 0;
         publish(this, 'movie.ended', { movie: this, repeat: this.repeat })
+        if(!repeat){
+          this.pause();
+        }
+      }
+      
 
       // TODO: only reset currentTime if repeating
       if (this.repeat) {
       // Don't use setter, which publishes 'movie.seek'. Instead, update the
       // value and publish a 'movie.timeupdate' event.
-        this._currentTime = 0
+        this._currentTime = 0;
+        this._elapsedTime = 0;
         publish(this, 'movie.timeupdate', { movie: this })
       }
 
@@ -620,6 +648,11 @@ export class Movie {
       }
     })
   }
+
+  /**
+   * Updates the current time
+   * @param timestamp 
+   */
 
   private _updateCurrentTime (timestamp) {
     // If we're only instant-rendering (current frame only), it doens't matter
@@ -680,6 +713,7 @@ export class Movie {
       if (!layer.active && val(layer, 'enabled', reltime) && !this._renderingFrame) {
         // TODO: make an `activate()` method?
         layer.start()
+        console.log("Start")
         layer.active = true
       }
 
@@ -723,7 +757,7 @@ export class Movie {
   refresh (): Promise<null> {
     return new Promise(resolve => {
       this._renderingFrame = true
-      this._render(false, undefined, resolve)
+      this._render(false, undefined, resolve);
     })
   }
 
