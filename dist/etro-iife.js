@@ -1076,7 +1076,6 @@ var etro = (function () {
                  * The main reason this distinction exists is so that an image layer can
                  * be rotated without being cropped (see iss #46).
                  */
-                this.source.onpause = function (ev) { ev.target.currentTime = 0; };
                 this.cctx.drawImage(this.source, val(this, 'sourceX', this.currentTime), val(this, 'sourceY', this.currentTime), val(this, 'sourceWidth', this.currentTime), val(this, 'sourceHeight', this.currentTime), 
                 // `destX` and `destY` are relative to the layer
                 val(this, 'destX', this.currentTime), val(this, 'destY', this.currentTime), val(this, 'destWidth', this.currentTime), val(this, 'destHeight', this.currentTime));
